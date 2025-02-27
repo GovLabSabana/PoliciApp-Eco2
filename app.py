@@ -45,34 +45,43 @@ class LawDocumentProcessor:
         os.makedirs(self.index_directory, exist_ok=True)
 
     def load_vector_store(self):
-        """Carga el vector store existente o lo descarga si no existe"""
+        """Carga el vector store existente o lo descarga de Google Drive si no existe"""
         index_path = os.path.join(self.index_directory, "index.faiss")
     
         try:
-            # Verificar si el archivo existe
+            # Verificar si el archivo existe y tiene contenido
             if not os.path.exists(index_path) or os.path.getsize(index_path) == 0:
-                st.info("Descargando índice FAISS...")
+                st.info("El índice FAISS no se encuentra, descargando desde Google Drive...")
             
-                # Ejemplo usando requests para descargar desde URL pública
-                import requests
-                url = "URL_DE_TU_ARCHIVO_FAISS"
-                response = requests.get(url)
+                # URL de Google Drive
+                file_id = "1dg8CbnhbIpp4H0wXFG6qHZFtb8bvTdJ5"
             
-                # Guardar el archivo descargado
-                os.makedirs(os.path.dirname(index_path), exist_ok=True)
-                with open(index_path, 'wb') as f:
-                    f.write(response.content)
-            
-                st.success("Índice FAISS descargado correctamente.")
+                try:
+                # Usar gdown para descargar (necesitas añadirlo a requirements.txt)
+                    import gdown
+                
+                    # Crear directorio si no existe
+                    os.makedirs(os.path.dirname(index_path), exist_ok=True)
+                
+                    # Descargar el archivo
+                    url = f"https://drive.google.com/uc?id={file_id}"
+                    gdown.download(url, index_path, quiet=False)
+                
+                    st.success("Índice FAISS descargado correctamente.")
+                except Exception as download_error:
+                    st.error(f"Error descargando el índice: {str(download_error)}")
+                    return None
         
             # Cargar el índice
-            if os.path.exists(index_path):
+            if os.path.exists(index_path) and os.path.getsize(index_path) > 0:
                 return FAISS.load_local(
                     self.index_directory, 
                     self.embeddings,
                     allow_dangerous_deserialization=True
                 )
-            return None
+            else:
+                st.error("El archivo del índice FAISS no existe o está vacío después de intentar descargarlo.")
+                return None
         except Exception as e:
             st.error(f"Error cargando vector store: {str(e)}")
             return None

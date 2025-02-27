@@ -19,4 +19,4 @@ aiohttp
 fastapi
 uvicorn
 git-lfs
-
+gdown

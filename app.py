@@ -16,7 +16,7 @@ from langchain.memory import ConversationBufferMemory
 import re
 import speech_recognition as sr
 import queue
-
+import subprocess
 # Load environment variables
 load_dotenv()
 
@@ -27,6 +27,20 @@ if API_KEY is None:
     st.stop()
     
 st.set_page_config(page_title="EcoPoliciApp", layout="centered")
+
+def ensure_faiss_index():
+    """Verifica si el archivo FAISS está presente y lo descarga si es necesario"""
+    index_path = os.path.join("faiss_index", "index.faiss")
+
+    if not os.path.exists(index_path):
+        st.warning("El archivo FAISS no se encontró. Descargándolo desde Git LFS...")
+        try:
+            subprocess.run(["git", "lfs", "pull"], check=True)
+            st.success("Archivo FAISS descargado correctamente")
+        except Exception as e:
+            st.error(f"Error al descargar FAISS: {str(e)}")
+
+ensure_faiss_index()
 
 class LawDocumentProcessor:
     def __init__(self, document_directory="data", index_directory="faiss_index"):

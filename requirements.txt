@@ -18,3 +18,5 @@ speechrecognition
 aiohttp
 fastapi
 uvicorn
+git-lfs
+

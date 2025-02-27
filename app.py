@@ -16,7 +16,7 @@ from langchain.memory import ConversationBufferMemory
 import re
 import speech_recognition as sr
 import queue
-import subprocess
+
 # Load environment variables
 load_dotenv()
 
@@ -28,19 +28,7 @@ if API_KEY is None:
     
 st.set_page_config(page_title="EcoPoliciApp", layout="centered")
 
-def ensure_faiss_index():
-    """Verifica si el archivo FAISS está presente y lo descarga si es necesario"""
-    index_path = os.path.join("faiss_index", "index.faiss")
 
-    if not os.path.exists(index_path):
-        st.warning("El archivo FAISS no se encontró. Descargándolo desde Git LFS...")
-        try:
-            subprocess.run(["git", "lfs", "pull"], check=True)
-            st.success("Archivo FAISS descargado correctamente")
-        except Exception as e:
-            st.error(f"Error al descargar FAISS: {str(e)}")
-
-ensure_faiss_index()
 
 class LawDocumentProcessor:
     def __init__(self, document_directory="data", index_directory="faiss_index"):
@@ -57,9 +45,27 @@ class LawDocumentProcessor:
         os.makedirs(self.index_directory, exist_ok=True)
 
     def load_vector_store(self):
-        """Carga el vector store existente"""
+        """Carga el vector store existente o lo descarga si no existe"""
         index_path = os.path.join(self.index_directory, "index.faiss")
+    
         try:
+            # Verificar si el archivo existe
+            if not os.path.exists(index_path) or os.path.getsize(index_path) == 0:
+                st.info("Descargando índice FAISS...")
+            
+                # Ejemplo usando requests para descargar desde URL pública
+                import requests
+                url = "URL_DE_TU_ARCHIVO_FAISS"
+                response = requests.get(url)
+            
+                # Guardar el archivo descargado
+                os.makedirs(os.path.dirname(index_path), exist_ok=True)
+                with open(index_path, 'wb') as f:
+                    f.write(response.content)
+            
+                st.success("Índice FAISS descargado correctamente.")
+        
+            # Cargar el índice
             if os.path.exists(index_path):
                 return FAISS.load_local(
                     self.index_directory, 

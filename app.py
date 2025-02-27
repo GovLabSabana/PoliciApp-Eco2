@@ -45,81 +45,70 @@ class LawDocumentProcessor:
         os.makedirs(self.index_directory, exist_ok=True)
 
     def load_vector_store(self):
-        """Carga el vector store existente o lo descarga de Google Drive si no existe"""
-        index_path = os.path.join(self.index_directory, "index.faiss")
+        """Loads existing vector store or downloads it from Google Drive if it doesn't exist"""
+        index_faiss_path = os.path.join(self.index_directory, "index.faiss")
+        index_pkl_path = os.path.join(self.index_directory, "index.pkl")
     
-        try:
-            # Verificar si el archivo existe y tiene contenido
-            if not os.path.exists(index_path) or os.path.getsize(index_path) == 0:
-                st.info("El índice FAISS no se encuentra, descargando desde Google Drive...")
-            
-                # URL de Google Drive
-                file_id = "1dg8CbnhbIpp4H0wXFG6qHZFtb8bvTdJ5"
-            
-                try:
-                # Usar gdown para descargar (necesitas añadirlo a requirements.txt)
-                    import gdown
-                
-                    # Crear directorio si no existe
-                    os.makedirs(os.path.dirname(index_path), exist_ok=True)
-                
-                    # Descargar el archivo
-                    url = f"https://drive.google.com/uc?id={file_id}"
-                    gdown.download(url, index_path, quiet=False)
-                
-                    st.success("Índice FAISS descargado correctamente.")
-                except Exception as download_error:
-                    st.error(f"Error descargando el índice: {str(download_error)}")
-                    return None
+        os.makedirs(self.index_directory, exist_ok=True)
+    
+        # Check if the FAISS file exists and has content
+        faiss_exists = os.path.exists(index_faiss_path) and os.path.getsize(index_faiss_path) > 0
+    
+        if not faiss_exists:
+            st.info("FAISS index file missing, downloading from Google Drive...")
         
-            # Cargar el índice
-            if os.path.exists(index_path) and os.path.getsize(index_path) > 0:
-                return FAISS.load_local(
-                    self.index_directory, 
-                    self.embeddings,
-                    allow_dangerous_deserialization=True
-                )
-            else:
-                st.error("El archivo del índice FAISS no existe o está vacío después de intentar descargarlo.")
+            # Google Drive file ID
+            faiss_file_id = "1dg8CbnhbIpp4H0wXFG6qHZFtb8bvTdJ5"  # Your .faiss file ID
+        
+            try:
+                import gdown
+            
+                # Use a temporary file for download to avoid partial downloads
+                temp_path = os.path.join(self.index_directory, "temp_index.faiss")
+            
+                # Download the file
+                url = f"https://drive.google.com/uc?id={faiss_file_id}"
+                gdown.download(url, temp_path, quiet=False)
+            
+                # Check if download was successful
+                if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                    # Rename to final filename
+                    if os.path.exists(index_faiss_path):
+                        os.remove(index_faiss_path)
+                    os.rename(temp_path, index_faiss_path)
+                    st.success("FAISS index downloaded successfully.")
+                else:
+                    st.error("Failed to download FAISS index.")
+                    return None
+                
+            except Exception as download_error:
+                st.error(f"Error downloading index: {str(download_error)}")
                 return None
-        except Exception as e:
-            st.error(f"Error cargando vector store: {str(e)}")
-            return None
-            
-    def process_excel_file(self, file_path):
-        """Procesa archivos Excel y los convierte en documentos para el vectorstore"""
+    
+     # Try loading the vector store
         try:
-            # Lee el archivo Excel (múltiples hojas)
-            xls = pd.ExcelFile(file_path)
-            documents = []
-            
-            # Procesa cada hoja como un documento separado
-            for sheet_name in xls.sheet_names:
-                df = pd.read_excel(file_path, sheet_name=sheet_name)
-                
-                # Convertir el DataFrame a texto
-                text_content = f"Hoja: {sheet_name}\n\n"
-                
-                # Agrega nombres de columnas
-                text_content += " | ".join(df.columns) + "\n"
-                
-                # Agrega filas
-                for _, row in df.iterrows():
-                    text_content += " | ".join(str(cell) for cell in row) + "\n"
-                
-                # Crea un documento con el contenido de la hoja
-                from langchain.schema import Document
-                doc = Document(
-                    page_content=text_content,
-                    metadata={"source": os.path.basename(file_path), "sheet": sheet_name}
-                )
-                documents.append(doc)
-                
-            return documents
+            vector_store = FAISS.load_local(
+                self.index_directory, 
+                self.embeddings,
+                allow_dangerous_deserialization=True
+            )
+            st.success("Vector store loaded successfully!")
+            return vector_store
         except Exception as e:
-            st.error(f"Error procesando archivo Excel {os.path.basename(file_path)}: {str(e)}")
-            return []
-
+            st.error(f"Error loading vector store: {str(e)}")
+        
+            # I it fails, the file might be corrupted - try an alternative approach
+            st.warning("The FAISS index appears to be corrupted. Trying to rebuild it...")
+        
+            # Rename the problematic file for debugging
+            problem_file = os.path.join(self.index_directory, "problem_index.faiss")
+            if os.path.exists(problem_file):
+                os.remove(problem_file)
+            os.rename(index_faiss_path, problem_file)
+        
+            # Create a new index from documents
+            return self.process_documents()
+    
     def process_documents(self):
         """Procesa los documentos PDF, Excel y TXT y crea el vector store"""
         try:
